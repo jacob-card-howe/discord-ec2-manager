@@ -53,7 +53,7 @@ The `-tv` flag allows you to give your custom tag a value of whatever you want. 
 With the `-o` flag, you're able to set the One Time Password's length. The default value is `6` and the flag accepts an integer as an input.
 
 ## Running `discord-ec2-manager` via Docker
-Some stuff about how to get it running here
+_**COMING SOON!**_
 
 ## Discord Server Commands
 This section will cover the commands available to you once the bot running and a member of your Discord server.
@@ -81,3 +81,20 @@ This command will tell you all about what each of the commands do on the Discord
 
 ## Bonus Stuff
 If you'd like a `user data` script that'll start Minecraft on your server's launch and subsequent reboots, as well as automatically stop the EC2 instance when no one is connected to the server via TCP port 25565, check out my [`mc-server`](https://github.com/jacob-howe/mc-server) project. 
+
+## Additional Links / Resources
+#### Documentaion
+* [`discordgo` Documentation via pkg.go.dev](https://pkg.go.dev/github.com/bwmarrin/discordgo)
+* [`aws-sdk-go-v2/aws` Documentation via pkg.go.dev](https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/aws)
+* [`aws-sdk-go-v2/config` Documentation via pkg.go.dev](https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/config)
+* [`aws-sdk-go-v2/service/ec2` Documentation via pkg.go.dev](https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/ec2)
+
+#### External Links
+* [Discord Developer Portal](https://discord.com/developers/applications/)
+* [Golang Download](https://golang.org/dl/)
+* [Amazon Web Services (AWS) CLI Download](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
+* [Amazon Web Services (AWS) Console](https://aws.amazon.com/console/)
+
+#### Go Modules
+* [`discordgo` by bwmarrin](https://github.com/bwmarrin/discordgo)
+* [`aws-sdk-go-v2` by aws](https://github.com/aws/aws-sdk-go-v2)
