@@ -63,7 +63,14 @@ With the `-o` flag, you're able to set the One Time Password's length. The defau
 ___
 
 ## Running `discord-ec2-manager` via Docker
-_**COMING SOON!**_
+This section will talk about some of the stuff you need to consider when spinning up the bot in a Docker Container.
+
+First and foremost, you'll want to build the Docker image by running `docker build -t discord-ec2-manager .` in the root of `discord-ec2-manager/`. If you're passing in a `user data` script, you'll want to make sure to include it in your `discord-ec2-manager/discord-ec2-manager` directory, and pass in the path to your file via `-e PATH_TO_USERDATA=`
+
+Next up, to run the Docker container locally (your bot won't work unless you can somehow pass in your AWS credentials to your container) enter in `docker run -e BOT_TOKEN=YOUR_BOT_TOKEN -e CHANNEL_ID=YOUR_CHANNEL_ID . . .discord-ec2-manager:latest` to your terminal. After you pass in `CHANNEL_ID` it's relatively optional what flags you pass in.
+
+If you're running this in ECS, you may encounter issues if you pass in an empty string for `INSTANCE_ID`. I have `INSTANCE_ID` set to `i-actualgarbage` and things seem to be working fine for me up in AWS Land! 
+
 
 ## Discord Server Commands
 This section will cover the commands available to you once the bot running and a member of your Discord server.
