@@ -58,11 +58,11 @@ ___
 The `-tv` flag allows you to give your custom tag a value of whatever you want. The default value is `Created by Discord` and the flag accepts a string as an input.
 ___
 
-#### `-svc` AWS EC2 Tag Value (Optional)
+#### `-svc` Custom Service Name Value (Optional)
 The `-svc` flag allows you to enter in a custom service name that is running on your `discord-ec2-manager` managed EC2 instance. This flag accepts a string as an input.
 ___
 
-#### `-p` AWS EC2 Tag Value (Optional)
+#### `-p` Custom Service Port Value (Optional)
 The `-p` flag allows you to enter in a custom port that your service (denoted by the `-svc` flag) is running on in your `discord-ec2-manager` managed EC2 instance. This flag accepts a string as an input.
 ___
 
