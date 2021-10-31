@@ -39,6 +39,10 @@ var (
 	UserTagKey          string
 	UserTagValue        string
 
+	// Service Specific Variables
+	UserServiceName string
+	UserServicePort string
+
 	// Allows for custom OTP lengths
 	OTPLength int
 )
@@ -74,6 +78,10 @@ func init() {
 	flag.StringVar(&UserPathToScript, "u", "", "The absolute path to your userdata.sh script (optional).")
 	flag.StringVar(&UserTagKey, "tk", "Name", "The key of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserTagValue, "tv", "Created by Discord", "The value of the tag you'd like to assign your EC2 instance (optional).")
+
+	// Used for more granular !help messages, eventually to be used for a service healthcheck
+	flag.StringVar(&UserServiceName, "svc", "", "If your server is running a specific service, you can use this flag to specify its name (optional).")
+	flag.StringVar(&UserServicePort, "p", "", "If your service is running on a specific port, you can use this flag to include it in your !help message (optional).")
 
 	// Stuff for GenerateOTP
 	flag.IntVar(&OTPLength, "o", 6, "The length of the OTP you'd like to generate (optional).")
@@ -134,11 +142,11 @@ func GenerateOTP(length int) (string, error) {
 // Listens for new messages, starts a timer / loop to send messages to discord anytime there's a new RSS message
 func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// Checks to see if the message that was created is one of the following:
-	// !create 	  -- Creates new EC2 instance, outputs "2FA" code to bot's console so only admins can create EC2 instances
+	// !create 	  -- Creates new EC2 instance, outputs "2FA" code to bot's error logs so only admins can create EC2 instances
 	// !status 	  -- Checks the status of the EC2 instance
 	// !start  	  -- Starts the EC2 instance
 	// !stop   	  -- Stops the EC2 instance
-	// !terminate -- Terminates (deletes) the EC2 instance
+	// !terminate -- Terminates (deletes) the EC2 instance, outputs "2FA" code to bot's error logs so only admins can terminate instances
 	// !help   	  -- Sends a discord message with all command information
 
 	// Bails out of the script if the new message is from this bot
@@ -289,10 +297,27 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "!terminate":
 		GenerateOTP(OTPLength)
 	case "!help":
-		_, err := s.ChannelMessageSend(ChannelId, "**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:\n\n**Logging Into Minecraft**: `<Instance's Public IP>:25565`")
-		if err != nil {
-			log.Println("Error sending message:", err)
+
+		if UserServiceName != "" && UserServicePort != "" {
+			helpMessage := fmt.Sprintf("**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:\n\n`%s` is running on port `%s`", UserServiceName, UserServicePort)
+			_, err := s.ChannelMessageSend(ChannelId, helpMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+			}
+		} else if UserServiceName != "" && UserServicePort == "" {
+			helpMessage := fmt.Sprintf("**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:\n\nYour EC2 instance is running `%s`.", UserServiceName)
+			_, err := s.ChannelMessageSend(ChannelId, helpMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+			}
+		} else {
+			helpMessage := fmt.Sprintf("**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:")
+			_, err := s.ChannelMessageSend(ChannelId, helpMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+			}
 		}
+
 	default:
 		// Clears out previous message array
 		previousDiscordMessages = nil
