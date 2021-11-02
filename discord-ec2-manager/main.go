@@ -165,7 +165,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "!create":
 		GenerateOTP(OTPLength)
 	case "!status":
-
 		if UserInstanceId == "" {
 			tagName := "tag:" + UserTagKey
 
@@ -186,17 +185,11 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		instanceIds = append(instanceIds, UserInstanceId)
-		tagName := "tag:" + UserTagKey
 
 		status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
 			InstanceIds: instanceIds,
-			Filters: []types.Filter{
-				{
-					Name:   aws.String(tagName),
-					Values: []string{UserTagValue},
-				},
-			},
 		})
+
 		if err != nil {
 			log.Println("Error getting status:", err)
 		}
