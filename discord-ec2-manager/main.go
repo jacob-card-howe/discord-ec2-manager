@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -42,6 +43,9 @@ var (
 	// Service Specific Variables
 	UserServiceName string
 	UserServicePort string
+
+	// Service Check (Healthcheck) Variables
+	ServiceCheckPort string
 
 	// Allows for custom OTP lengths
 	OTPLength int
@@ -81,7 +85,8 @@ func init() {
 
 	// Used for more granular !help messages, eventually to be used for a service healthcheck
 	flag.StringVar(&UserServiceName, "svc", "", "If your server is running a specific service, you can use this flag to specify its name (optional).")
-	flag.StringVar(&UserServicePort, "p", "", "If your service is running on a specific port, you can use this flag to include it in your !help message (optional).")
+	flag.StringVar(&UserServicePort, "sp", "", "If your service is running on a specific port, you can use this flag to include it in your !help message (optional).")
+	flag.StringVar(&ServiceCheckPort, "scp", "", "If your service is running a health check, you can specify what port (on the EC2 instance) to send requests to (optional).")
 
 	// Stuff for GenerateOTP
 	flag.IntVar(&OTPLength, "o", 6, "The length of the OTP you'd like to generate (optional).")
@@ -200,7 +205,26 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				instanceState := fmt.Sprintf("%v", *i.State)
 
 				if strings.Contains(instanceState, "running") {
-					statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`", *i.InstanceId, *i.PublicIpAddress, *i.State)
+					if ServiceCheckPort == "" {
+						statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`", *i.InstanceId, *i.PublicIpAddress, *i.State)
+					} else {
+						instanceIpAndPort := fmt.Sprint("http://", *i.PublicIpAddress, ":", ServiceCheckPort)
+
+						resp, err := http.Get(instanceIpAndPort)
+						if err != nil {
+							log.Println("Error sending GET request to instance: ", err)
+							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` status cannot be checked right now. See your bot's error logs for more information.", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "inactive", UserServicePort)
+						}
+
+						respStatus := string(resp.Status)
+
+						if strings.Contains(respStatus, "200") {
+							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` is currently `%s` on port `%s`", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "active", UserServicePort)
+						} else {
+							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` is currently `%s` on port `%s`", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "inactive", UserServicePort)
+						}
+					}
+
 				} else {
 					statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance State: `%v`", *i.InstanceId, *i.State)
 				}
