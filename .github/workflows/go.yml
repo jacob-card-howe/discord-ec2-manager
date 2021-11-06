@@ -18,5 +18,5 @@ jobs:
       with:
         go-version: 1.17
 
-    - name: Build
+    - name: Build Go Binary
       run: cd discord-ec2-manager && go build -v
