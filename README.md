@@ -96,12 +96,16 @@ If you're running this in ECS, you may encounter issues if you pass in an empty 
 ## Discord Server Commands
 This section will cover the commands available to you once the bot running and a member of your Discord server.
 
-### `!create`
-This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will create a new EC2 instance with the `tags`, `security group`, and in the `subnet` you provided via your bot's argument flags. Additionally, if you specify an absolute path to your `user data` shell scripts, the EC2 instance will run those commands on initial boot.
+### 🆕 `!create`
+This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will create a new EC2 instance with the tags, security group ID, and in the subnet you provided either via your bot's argument flags on start up **OR** via your bot's argument flags in your `!create` Discord message. Additionally, if you use the `-u` flag (either at start up or in your `!create` Discord message) to include a path to a User Data script, your EC2 instance will run those commands on intial boot.
+
+**Example `!create` Discord Message:** `!create -sn subnet-1234abcde5678 -sg sg-1234abcde5678 -ami ami-1234abcde5678 -tk MyCustomTagKey -tv MyCustomTagValue -u /absolute/path/to/userdata.sh -svc MyServiceName -sp 1234 -scp 7777`
 ___
 
-### `!terminate`
-This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will terminate either the EC2 instance you passed in via `-i`, or the EC2 instance you created via `!create` depending on whichever one is most recent.
+### 🆕 `!terminate`
+This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will terminate all `discord-ec2-manager` managed EC2 instances. You can target specific instances with a `-i` parameter flag tailing your `!terminate` command in Discord.
+
+**Example `!terminate` Discord Message:** `!terminate -i i-1234abcde5678`
 ___
 
 ### `!start`
@@ -117,6 +121,8 @@ This command will return three pieces of information:
 1. Your EC2 Instance's Instance ID (i-stringofcharacters)
 1. Your EC2 Instance's Public IP Address (if public IP address is not nil)
 1. Your EC2 Instance's State (`pending`, `running`, `stopped`, etc.)
+1. Information regarding your service's name and service port (if `-svc` and `-sp` flags were used)
+1. Your service's current status (if `-scp` flag was used, and service is serving a valid HTTP endpoint)
 ___
 
 ### `!help`
