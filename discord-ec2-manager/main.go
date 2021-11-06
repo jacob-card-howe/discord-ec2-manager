@@ -66,6 +66,8 @@ var SecurityGroupIds []string
 // Used to keep track of recent messages in the bot's discord channel
 var previousDiscordMessages []string
 
+var validUserSubnetId bool
+
 // Initializes the Discord Part of the App for DiscordGo module
 func init() {
 	// Discord Bot stuff if you have an existing EC2 instance
@@ -167,8 +169,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	client := ec2.NewFromConfig(cfg)
 
 	switch m.Content {
-	case "!create":
-		GenerateOTP(OTPLength)
 	case "!status":
 		if UserInstanceId == "" {
 			tagName := "tag:" + UserTagKey
@@ -186,7 +186,17 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Println("Error getting status:", err)
 			}
 
-			UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
+			if *status.Reservations[0].Instances[0].InstanceId != "" {
+				UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
+			} else {
+				statusMessage = "You don't have any running or stopped instances! Get started by running the `!create` command."
+				_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+				if err != nil {
+					log.Println("Error sending message:", err)
+				}
+
+				return
+			}
 		}
 
 		instanceIds = append(instanceIds, UserInstanceId)
@@ -311,8 +321,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Println("Error sending message:", err)
 			}
 		}
-	case "!terminate":
-		GenerateOTP(OTPLength)
 	case "!help":
 
 		if UserServiceName != "" && UserServicePort != "" {
@@ -334,7 +342,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Println("Error sending message:", err)
 			}
 		}
-
 	default:
 		// Clears out previous message array
 		previousDiscordMessages = nil
@@ -352,72 +359,272 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 
+		if strings.Contains(previousDiscordMessages[0], "!create") {
+			GenerateOTP(OTPLength)
+			return
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!terminate") {
+			GenerateOTP(OTPLength)
+			return
+		}
+
 		if previousDiscordMessages[0] == oneTimePassword && strings.Contains(previousDiscordMessages[1], "!create") {
-			if UserAmiId == "" {
-				UserAmiId = "ami-09e67e426f25ce0d7" // Ubuntu 20.04
-			}
-			if UserSecurityGroupId == "" {
-				log.Println("Your EC2 instance will be created with your VPC's default security group. You may not have access to your EC2 instance!")
+
+			// Breaks !create message into an array of strings
+			messageContentSlice := strings.Fields(previousDiscordMessages[1])
+
+			// Sets flags we're looking for in this command
+			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp"}
+
+			log.Println("Checking for required flags...")
+			if len(messageContentSlice) > 1 {
+				for i := 1; i < len(messageContentSlice); i += 2 {
+					if messageContentSlice[i] != "-ami" && messageContentSlice[i] != "-sn" && messageContentSlice[i] != "-sg" {
+						log.Printf("%s is not a required flag, skipping...", messageContentSlice[i])
+						break
+					} else {
+						switch messageContentSlice[i] {
+						case "-ami":
+							for j := 0; j < len(flagArray); j++ {
+								if messageContentSlice[i+1] != flagArray[j] {
+									log.Println("Custom Amazon Machine Image ID found:", messageContentSlice[i+1])
+									UserAmiId = messageContentSlice[i+1]
+									break
+								}
+							}
+						case "-sn":
+							for j := 0; j < len(flagArray); j++ {
+								if messageContentSlice[i+1] != flagArray[j] {
+									log.Println("Subnet ID found:", messageContentSlice[i+1])
+									UserSubnetId = messageContentSlice[i+1]
+									validUserSubnetId = true
+									break
+								} else {
+									log.Println("To use !create you MUST specify a subnet via the -sn flag either when starting the bot, or via your !create Discord Message. Please either restart your bot OR resend your !create Discord Message with the -sn flag and a valid Subnet ID.")
+									validUserSubnetId = false
+									return
+								}
+							}
+						}
+
+						if UserAmiId == "" {
+							UserAmiId = "ami-09e67e426f25ce0d7" // Ubuntu 20.04
+						}
+					}
+				}
+			} else if UserSubnetId != "" && UserAmiId != "" {
+				log.Println("Subnet ID and AMI ID were either previously set, or set via the bot's environment variables.")
+				validUserSubnetId = true
+				break
 			} else {
-				SecurityGroupIds = append(SecurityGroupIds, UserSecurityGroupId)
-			}
-			if UserSubnetId == "" {
-				log.Println("To use !create, you MUST specify a subnet via the -sn flag when starting the bot. Please restart the bot with your included Security Group ID to continue with full functionality.")
-				statusMessage = "**ERROR**: The bot was misconfigured on start up, please check your bot's error logs for more information."
+				log.Println("Missing parameters!")
+				return
 			}
 
-			content, err := ioutil.ReadFile(UserPathToScript)
-			if err != nil {
-				log.Println("Error reading from file:", err)
+			// TODO: Send discord messages when an error is detected with !create command
+
+			if validUserSubnetId {
+				for i := 1; i < len(messageContentSlice); i += 2 {
+					switch messageContentSlice[i] {
+					case "-sg": // Security Group Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserSecurityGroupId = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Security Group ID:", messageContentSlice[i+1])
+								statusMessage = fmt.Sprintf("Invalid Security Group ID: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+
+								return
+							}
+						}
+					case "-tk": // Tag Key Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserTagKey = messageContentSlice[i+1]
+							} else {
+								// TODO: Build in logic to determine invalid key based on AWS standards
+								log.Println("Invalid Tag Key:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Tag Key: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					case "-tv": // Tag Value Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserTagValue = messageContentSlice[i+1]
+							} else {
+								// TODO: Build in logic to determine invalid key values based on AWS standards
+								log.Println("Invalid Tag Value", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Tag Value: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					case "-u": // User Data Path Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserPathToScript = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Path to User Data Script:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Path to User Data Script: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+
+								return
+							}
+						}
+					case "-svc": // Service Name Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserServiceName = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Service Name:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Service Name: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					case "-sp": // Service Port Flag
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserServicePort = messageContentSlice[i+1]
+								break
+							} else {
+								log.Println("Invalid Service Port:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Service Port: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					case "-scp": // Service Check Port Flag (Healthcheck)
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								ServiceCheckPort = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Service Check Port:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Service Check Port: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					}
+				}
+
+				content, err := ioutil.ReadFile(UserPathToScript)
+				if err != nil {
+					log.Println("Error reading from file, instance will launch without userdata.sh:", err)
+				}
+
+				encodedUserDataContent := base64.StdEncoding.EncodeToString([]byte(content))
+
+				input := &ec2.RunInstancesInput{
+					ImageId:          aws.String(UserAmiId),
+					InstanceType:     types.InstanceTypeT3aMedium,
+					MinCount:         aws.Int32(1),
+					MaxCount:         aws.Int32(1),
+					SecurityGroupIds: SecurityGroupIds,
+					SubnetId:         aws.String(UserSubnetId),
+					UserData:         aws.String(encodedUserDataContent),
+				}
+
+				result, err := MakeInstance(context.TODO(), client, input)
+				if err != nil {
+					fmt.Println("Error creating EC2 instance:", err)
+				}
+
+				UserInstanceId = *result.Instances[0].InstanceId
+
+				if result.Instances[0].InstanceId != nil {
+					log.Println("OTP entered correctly, instance created:", UserInstanceId)
+					statusMessage = fmt.Sprintf("One time password entered correctly, your EC2 instance has been created!\nInstance ID: `%s`", UserInstanceId)
+					instanceIds = append(instanceIds, UserInstanceId)
+				}
+				_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+				if err != nil {
+					log.Println("Error sending message:", err)
+				}
+
+				tagInput := &ec2.CreateTagsInput{
+					Resources: []string{UserInstanceId},
+					Tags: []types.Tag{
+						{
+							Key:   aws.String(UserTagKey),
+							Value: aws.String(UserTagValue),
+						},
+					},
+				}
+
+				_, err = CreateTag(context.TODO(), client, tagInput)
+				if err != nil {
+					log.Println("Error tagging resources:", err)
+				}
+			} else {
+				return
 			}
 
-			encodedUserDataContent := base64.StdEncoding.EncodeToString([]byte(content))
+		}
 
-			input := &ec2.RunInstancesInput{
-				ImageId:          aws.String(UserAmiId),
-				InstanceType:     types.InstanceTypeT3aMedium,
-				MinCount:         aws.Int32(1),
-				MaxCount:         aws.Int32(1),
-				SecurityGroupIds: SecurityGroupIds,
-				SubnetId:         aws.String(UserSubnetId),
-				UserData:         aws.String(encodedUserDataContent),
-			}
+		if previousDiscordMessages[0] == oneTimePassword && strings.Contains(previousDiscordMessages[1], "!terminate") {
 
-			result, err := MakeInstance(context.TODO(), client, input)
-			if err != nil {
-				fmt.Println("Error creating EC2 instance:", err)
-			}
+			// Breaks !create message into an array of strings
+			messageContentSlice := strings.Fields(previousDiscordMessages[1])
+			instanceIds = nil
 
-			UserInstanceId = *result.Instances[0].InstanceId
-
-			if result.Instances[0].InstanceId != nil {
-				statusMessage = fmt.Sprintf("One time password entered correctly, your EC2 instance has been created!\nInstance ID: `%s`", UserInstanceId)
+			if len(messageContentSlice) > 1 {
+				for i := 1; i < len(messageContentSlice); i += 2 {
+					switch messageContentSlice[i] {
+					case "-i":
+						if messageContentSlice[i+1] != "-i" {
+							UserInstanceId = messageContentSlice[i+1]
+							instanceIds = append(instanceIds, UserInstanceId)
+							break
+						}
+					}
+				}
+			} else {
 				instanceIds = append(instanceIds, UserInstanceId)
 			}
-			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
 
-			tagInput := &ec2.CreateTagsInput{
-				Resources: []string{UserInstanceId},
-				Tags: []types.Tag{
-					{
-						Key:   aws.String(UserTagKey),
-						Value: aws.String(UserTagValue),
-					},
-				},
-			}
-
-			_, err = CreateTag(context.TODO(), client, tagInput)
-			if err != nil {
-				log.Println("Error tagging resources:", err)
-			}
-
-		} else if previousDiscordMessages[0] == oneTimePassword && strings.Contains(previousDiscordMessages[1], "!terminate") {
 			input := &ec2.TerminateInstancesInput{
 				InstanceIds: instanceIds,
 			}
+
 			_, err := TerminateInstance(context.TODO(), client, input)
 			if err != nil {
 				log.Println("Error terminating instance:", err)
@@ -430,17 +637,8 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Println("Error sending message:", err)
 			}
 			UserInstanceId = ""
-		} else if previousDiscordMessages[0] != oneTimePassword && (previousDiscordMessages[1] == "!create" || previousDiscordMessages[1] == "!terminate") {
-			log.Println("One time password entered incorrectly. Message entered:", m.Content)
-			statusMessage = "One time password entered incorrectly, please re-enter your ****`!create`** or **`!terminate`** command to re-generate your one time password."
-			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-			return
-		} else {
-			log.Println("Not looking for OTP here, ignoring message.", previousDiscordMessages[1])
 		}
+
 		return
 	}
 }
