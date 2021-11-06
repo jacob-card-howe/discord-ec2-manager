@@ -75,6 +75,14 @@ ___
 The `-scp` flag allows you to enter in a custom port that your service's healthcheck is running on. When used, `discord-ec2-manager` will send an HTTP GET request to its managed EC2 instance over the port specified by `-scp`. This flag accepts a string as an input.
 ___
 
+### `-ia` EC2 IAM Instance Profile ARN (Optional)
+The `-ia` flag allows you to enter in the ARN of an IAM Role that you would like to attach to your EC2 instance on its creation. **Cannot be used if using the `-in` flag.** The flag does not have a default value, and accepts a string as an input.
+___
+
+### `-in` EC2 IAM Instance Profile Name (Optional)
+The `-in` flag allows you to enter in the Name of the IAM Role that you would like to attach to your EC2 instance on its creation. **Cannot be used if using the `-ia` flag.** The flag does not have a default value, and accepts a string as an input.
+___
+
 ### `-o` One Time Password Length (Optional)
 With the `-o` flag, you're able to set the One Time Password's length. The default value is `6` and the flag accepts an integer as an input.
 

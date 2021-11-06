@@ -44,6 +44,10 @@ var (
 	UserServiceName string
 	UserServicePort string
 
+	// IAM Role Variables
+	UserIamArn         string
+	UserIamProfileName string
+
 	// Service Check (Healthcheck) Variables
 	ServiceCheckPort string
 
@@ -85,6 +89,10 @@ func init() {
 	flag.StringVar(&UserTagKey, "tk", "Name", "The key of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserTagValue, "tv", "Created by Discord", "The value of the tag you'd like to assign your EC2 instance (optional).")
 
+	// IAM Instance Profiles
+	flag.StringVar(&UserIamArn, "ia", "", "The ARN of the IAM Instance Profile you'd like to attach to your EC2 instance on !create commands (optional).")
+	flag.StringVar(&UserIamProfileName, "in", "", "The Name of the IAM Instance Profile you'd like to attach to your EC2 instance on !create commands (required if using -ia flag)")
+
 	// Used for more granular !help messages, eventually to be used for a service healthcheck
 	flag.StringVar(&UserServiceName, "svc", "", "If your server is running a specific service, you can use this flag to specify its name (optional).")
 	flag.StringVar(&UserServicePort, "sp", "", "If your service is running on a specific port, you can use this flag to include it in your !help message (optional).")
@@ -109,11 +117,20 @@ type EC2InstanceAPI interface {
 	TerminateInstances(ctx context.Context,
 		params *ec2.TerminateInstancesInput,
 		optFns ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error)
+
+	AssociateIamInstanceProfile(ctx context.Context,
+		params *ec2.AssociateIamInstanceProfileInput,
+		optFns ...func(*ec2.Options)) (*ec2.AssociateIamInstanceProfileOutput, error)
 }
 
 // Creates an EC2 instance
 func MakeInstance(c context.Context, api EC2InstanceAPI, input *ec2.RunInstancesInput) (*ec2.RunInstancesOutput, error) {
 	return api.RunInstances(c, input)
+}
+
+// Associates IAM Role with EC2 Instance
+func AttachIamRole(c context.Context, api EC2InstanceAPI, input *ec2.AssociateIamInstanceProfileInput) (*ec2.AssociateIamInstanceProfileOutput, error) {
+	return api.AssociateIamInstanceProfile(c, input)
 }
 
 // Creates tags fo created EC2 instance
@@ -354,7 +371,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		if len(previousDiscordMessagesStructs) > 0 {
 			for i := 0; i < len(previousDiscordMessagesStructs); i++ {
-				log.Println("Adding this message:", previousDiscordMessagesStructs[i].Content)
 				previousDiscordMessages = append(previousDiscordMessages, previousDiscordMessagesStructs[i].Content)
 			}
 		}
@@ -375,7 +391,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			messageContentSlice := strings.Fields(previousDiscordMessages[1])
 
 			// Sets flags we're looking for in this command
-			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp"}
+			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in"}
 
 			log.Println("Checking for required flags...")
 			if len(messageContentSlice) > 1 {
@@ -543,7 +559,51 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 								return
 							}
 						}
+					case "-ia": // EC2 Instance Role ARN
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserIamArn = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid IAM ARN:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid IAM ARN: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
+					case "-in": // EC2 Instance Role ARN
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserIamProfileName = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid IAM Name:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid IAM Name: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
 					}
+				}
+
+				if UserIamArn != "" && UserIamProfileName != "" {
+					log.Println("Error, cannot use -in and -ia flags together. Please run the !create command again with only one flag specified.")
+					statusMessage = "Error, cannot use -in and -ia flags together. Please run the `!create` command again with only one flag specified."
+
+					_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+					if err != nil {
+						log.Println("Error sending message:", err)
+					}
+
+					return
 				}
 
 				content, err := ioutil.ReadFile(UserPathToScript)
@@ -561,6 +621,10 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 					SecurityGroupIds: SecurityGroupIds,
 					SubnetId:         aws.String(UserSubnetId),
 					UserData:         aws.String(encodedUserDataContent),
+					IamInstanceProfile: &types.IamInstanceProfileSpecification{
+						Arn:  aws.String(UserIamArn),
+						Name: aws.String(UserIamProfileName),
+					},
 				}
 
 				result, err := MakeInstance(context.TODO(), client, input)
@@ -594,6 +658,20 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				if err != nil {
 					log.Println("Error tagging resources:", err)
 				}
+
+				// iamRoleInput := &ec2.AssociateIamInstanceProfileInput{
+				// 	InstanceId: aws.String(UserInstanceId),
+				// 	IamInstanceProfile: &types.IamInstanceProfileSpecification{
+				// 		Arn:  aws.String(UserIamArn),
+				// 		Name: aws.String(UserIamProfileName),
+				// 	},
+				// }
+
+				// _, err = AttachIamRole(context.TODO(), client, iamRoleInput)
+				// if err != nil {
+				// 	log.Println("Error attaching IAM role to EC2 instance", err)
+				// }
+
 			} else {
 				return
 			}
