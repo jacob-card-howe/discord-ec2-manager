@@ -39,6 +39,7 @@ var (
 	UserPathToScript    string
 	UserTagKey          string
 	UserTagValue        string
+	UserKeyName         string
 
 	// Service Specific Variables
 	UserServiceName string
@@ -54,6 +55,9 @@ var (
 	// Allows for custom OTP lengths
 	OTPLength int
 )
+
+// Run Instances Input for Key Pair Name Check
+var runInstancesInput *ec2.RunInstancesInput
 
 // One Time Password
 var oneTimePassword string
@@ -88,6 +92,7 @@ func init() {
 	flag.StringVar(&UserPathToScript, "u", "", "The absolute path to your userdata.sh script (optional).")
 	flag.StringVar(&UserTagKey, "tk", "Name", "The key of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserTagValue, "tv", "Created by Discord", "The value of the tag you'd like to assign your EC2 instance (optional).")
+	flag.StringVar(&UserKeyName, "k", "", "The name of the key pair you'd like to assign to your EC2 instance for remote access (optional).")
 
 	// IAM Instance Profiles
 	flag.StringVar(&UserIamArn, "ia", "", "The ARN of the IAM Instance Profile you'd like to attach to your EC2 instance on !create commands (optional).")
@@ -339,7 +344,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 	case "!help":
-
 		if UserServiceName != "" && UserServicePort != "" {
 			helpMessage := fmt.Sprintf("**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:\n\n`%s` is running on port `%s`", UserServiceName, UserServicePort)
 			_, err := s.ChannelMessageSend(ChannelId, helpMessage)
@@ -391,7 +395,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			messageContentSlice := strings.Fields(previousDiscordMessages[1])
 
 			// Sets flags we're looking for in this command
-			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in"}
+			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in", "-k"}
 
 			log.Println("Checking for required flags...")
 			if len(messageContentSlice) > 1 {
@@ -437,8 +441,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				log.Println("Missing parameters!")
 				return
 			}
-
-			// TODO: Send discord messages when an error is detected with !create command
 
 			if validUserSubnetId {
 				for i := 1; i < len(messageContentSlice); i += 2 {
@@ -591,6 +593,22 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 								return
 							}
 						}
+					case "-k": // EC2 Instance Key Pair Name
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserKeyName = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Key Pair Name:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Key Pair Name: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
 					}
 				}
 
@@ -613,21 +631,38 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 				encodedUserDataContent := base64.StdEncoding.EncodeToString([]byte(content))
 
-				input := &ec2.RunInstancesInput{
-					ImageId:          aws.String(UserAmiId),
-					InstanceType:     types.InstanceTypeT3aMedium,
-					MinCount:         aws.Int32(1),
-					MaxCount:         aws.Int32(1),
-					SecurityGroupIds: SecurityGroupIds,
-					SubnetId:         aws.String(UserSubnetId),
-					UserData:         aws.String(encodedUserDataContent),
-					IamInstanceProfile: &types.IamInstanceProfileSpecification{
-						Arn:  aws.String(UserIamArn),
-						Name: aws.String(UserIamProfileName),
-					},
+				if UserKeyName == "" {
+					runInstancesInput = &ec2.RunInstancesInput{
+						ImageId:          aws.String(UserAmiId),
+						InstanceType:     types.InstanceTypeT3aMedium,
+						MinCount:         aws.Int32(1),
+						MaxCount:         aws.Int32(1),
+						SecurityGroupIds: SecurityGroupIds,
+						SubnetId:         aws.String(UserSubnetId),
+						UserData:         aws.String(encodedUserDataContent),
+						IamInstanceProfile: &types.IamInstanceProfileSpecification{
+							Arn:  aws.String(UserIamArn),
+							Name: aws.String(UserIamProfileName),
+						},
+					}
+				} else {
+					runInstancesInput = &ec2.RunInstancesInput{
+						ImageId:          aws.String(UserAmiId),
+						InstanceType:     types.InstanceTypeT3aMedium,
+						MinCount:         aws.Int32(1),
+						MaxCount:         aws.Int32(1),
+						SecurityGroupIds: SecurityGroupIds,
+						SubnetId:         aws.String(UserSubnetId),
+						UserData:         aws.String(encodedUserDataContent),
+						IamInstanceProfile: &types.IamInstanceProfileSpecification{
+							Arn:  aws.String(UserIamArn),
+							Name: aws.String(UserIamProfileName),
+						},
+						KeyName: aws.String(UserKeyName),
+					}
 				}
 
-				result, err := MakeInstance(context.TODO(), client, input)
+				result, err := MakeInstance(context.TODO(), client, runInstancesInput)
 				if err != nil {
 					fmt.Println("Error creating EC2 instance:", err)
 				}
@@ -658,19 +693,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				if err != nil {
 					log.Println("Error tagging resources:", err)
 				}
-
-				// iamRoleInput := &ec2.AssociateIamInstanceProfileInput{
-				// 	InstanceId: aws.String(UserInstanceId),
-				// 	IamInstanceProfile: &types.IamInstanceProfileSpecification{
-				// 		Arn:  aws.String(UserIamArn),
-				// 		Name: aws.String(UserIamProfileName),
-				// 	},
-				// }
-
-				// _, err = AttachIamRole(context.TODO(), client, iamRoleInput)
-				// if err != nil {
-				// 	log.Println("Error attaching IAM role to EC2 instance", err)
-				// }
 
 			} else {
 				return
