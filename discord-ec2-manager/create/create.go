@@ -67,7 +67,7 @@ func CreateTag(c context.Context, api EC2InstanceAPI, input *ec2.CreateTagsInput
 	return api.CreateTags(c, input)
 }
 
-func CreateEc2Instance(messageContentSlice []string, flagArray []string, client *ec2.Client) (statusMessage string, UserInstanceId string) {
+func CreateEc2Instance(messageContentSlice []string, flagArray []string, client *ec2.Client) (statusMessage string, UserInstanceId string, UserTagKey string, UserTagValue string, UserServiceName string, UserServicePort string, ServiceCheckPort string) {
 	log.Println("Checking for required flags...")
 	if len(messageContentSlice) > 1 {
 		for i := 1; i < len(messageContentSlice); i += 2 {

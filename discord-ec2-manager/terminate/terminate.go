@@ -8,8 +8,10 @@ import (
 )
 
 var (
-	instanceIds    []string
+	instanceSpecified bool
+	instancesForTermination    []string
 	UserInstanceId string
+	input *ec2.TerminateInstancesInput
 )
 
 type EC2InstanceAPI interface {
@@ -23,24 +25,29 @@ func TerminateInstance(c context.Context, api EC2InstanceAPI, input *ec2.Termina
 	return api.TerminateInstances(c, input)
 }
 
-func TerminateEc2Instance(messageContentSlice []string, UserInstanceId string, client *ec2.Client) (statusMessage string) {
+func TerminateEc2Instance(messageContentSlice []string, instanceIds []string, client *ec2.Client) (statusMessage string, TerminatedInstanceId string) {
 	if len(messageContentSlice) > 1 {
 		for i := 1; i < len(messageContentSlice); i += 2 {
 			switch messageContentSlice[i] {
 			case "-i":
+				instanceSpecified = true
 				if messageContentSlice[i+1] != "-i" {
 					UserInstanceId = messageContentSlice[i+1]
-					instanceIds = append(instanceIds, UserInstanceId)
+					instancesForTermination = append(instancesForTermination, UserInstanceId)
 					break
 				}
 			}
 		}
-	} else {
-		instanceIds = append(instanceIds, UserInstanceId)
 	}
 
-	input := &ec2.TerminateInstancesInput{
-		InstanceIds: instanceIds,
+	if instanceSpecified {
+		input = &ec2.TerminateInstancesInput{
+			InstanceIds: instancesForTermination,
+		} 
+	} else {
+		input = &ec2.TerminateInstancesInput{
+			InstanceIds: instanceIds,
+		}
 	}
 
 	_, err := TerminateInstance(context.TODO(), client, input)

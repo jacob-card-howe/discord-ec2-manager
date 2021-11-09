@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"discord-ec2-manager/discord-ec2-manager/create"
+	"discord-ec2-manager/discord-ec2-manager/status"
 	"discord-ec2-manager/discord-ec2-manager/terminate"
 )
 
@@ -56,27 +56,27 @@ var (
 
 	// Allows for custom OTP lengths
 	OTPLength int
+
+	// Run Instances Input for Key Pair Name Check
+	runInstancesInput *ec2.RunInstancesInput
+
+	// One Time Password
+	oneTimePassword string
+
+	// Status Message
+	statusMessage string
+
+	// Instance ID
+	instanceIds []string
+
+	// SG IDs
+	SecurityGroupIds []string
+
+	// Used to keep track of recent messages in the bot's discord channel
+	previousDiscordMessages []string
+
+	validUserSubnetId bool
 )
-
-// Run Instances Input for Key Pair Name Check
-var runInstancesInput *ec2.RunInstancesInput
-
-// One Time Password
-var oneTimePassword string
-
-// Status Message
-var statusMessage string
-
-// Instance ID
-var instanceIds []string
-
-// SG IDs
-var SecurityGroupIds []string
-
-// Used to keep track of recent messages in the bot's discord channel
-var previousDiscordMessages []string
-
-var validUserSubnetId bool
 
 // Initializes the Discord Part of the App for DiscordGo module
 func init() {
@@ -112,31 +112,6 @@ func init() {
 	flag.Parse()
 }
 
-// EC2InstanceAPI defines the interface for the RunInstances, CreateTags, and TerminateInstances functions.
-type EC2InstanceAPI interface {
-	RunInstances(ctx context.Context,
-		params *ec2.RunInstancesInput,
-		optFns ...func(*ec2.Options)) (*ec2.RunInstancesOutput, error)
-
-	CreateTags(ctx context.Context,
-		params *ec2.CreateTagsInput,
-		optFns ...func(*ec2.Options)) (*ec2.CreateTagsOutput, error)
-
-	TerminateInstances(ctx context.Context,
-		params *ec2.TerminateInstancesInput,
-		optFns ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error)
-}
-
-// Creates an EC2 instance
-func MakeInstance(c context.Context, api EC2InstanceAPI, input *ec2.RunInstancesInput) (*ec2.RunInstancesOutput, error) {
-	return api.RunInstances(c, input)
-}
-
-// Terminates an EC2 instance
-func TerminateInstance(c context.Context, api EC2InstanceAPI, input *ec2.TerminateInstancesInput) (*ec2.TerminateInstancesOutput, error) {
-	return api.TerminateInstances(c, input)
-}
-
 // Generates a one time password
 func GenerateOTP(length int) (string, error) {
 	buffer := make([]byte, length)
@@ -159,13 +134,6 @@ func GenerateOTP(length int) (string, error) {
 
 // Listens for new messages, starts a timer / loop to send messages to discord anytime there's a new RSS message
 func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Checks to see if the message that was created is one of the following:
-	// !create 	  -- Creates new EC2 instance, outputs "2FA" code to bot's error logs so only admins can create EC2 instances
-	// !status 	  -- Checks the status of the EC2 instance
-	// !start  	  -- Starts the EC2 instance
-	// !stop   	  -- Stops the EC2 instance
-	// !terminate -- Terminates (deletes) the EC2 instance, outputs "2FA" code to bot's error logs so only admins can terminate instances
-	// !help   	  -- Sends a discord message with all command information
 
 	// Bails out of the script if the new message is from this bot
 	if m.Author.ID == s.State.User.ID {
@@ -181,82 +149,14 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	switch m.Content {
 	case "!status":
-		if UserInstanceId == "" {
-			tagName := "tag:" + UserTagKey
 
-			status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-				InstanceIds: instanceIds,
-				Filters: []types.Filter{
-					{
-						Name:   aws.String(tagName),
-						Values: []string{UserTagValue},
-					},
-				},
-			})
-			if err != nil {
-				log.Println("Error getting status:", err)
-			}
-
-			if *status.Reservations[0].Instances[0].InstanceId != "" {
-				UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
-			} else {
-				statusMessage = "You don't have any running or stopped instances! Get started by running the `!create` command."
-				_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-				if err != nil {
-					log.Println("Error sending message:", err)
-				}
-
-				return
-			}
-		}
-
-		instanceIds = append(instanceIds, UserInstanceId)
-
-		status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-			InstanceIds: instanceIds,
-		})
-
-		if err != nil {
-			log.Println("Error getting status:", err)
-		}
-
-		for _, r := range status.Reservations {
-			for _, i := range r.Instances {
-
-				instanceState := fmt.Sprintf("%v", *i.State)
-
-				if strings.Contains(instanceState, "running") {
-					if ServiceCheckPort == "" {
-						statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`", *i.InstanceId, *i.PublicIpAddress, *i.State)
-					} else {
-						instanceIpAndPort := fmt.Sprint("http://", *i.PublicIpAddress, ":", ServiceCheckPort)
-
-						resp, err := http.Get(instanceIpAndPort)
-						if err != nil {
-							log.Println("Error sending GET request to instance: ", err)
-							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` status cannot be checked right now. See your bot's error logs for more information.", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "inactive", UserServicePort)
-						}
-
-						respStatus := string(resp.Status)
-
-						if strings.Contains(respStatus, "200") {
-							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` is currently `%s` on port `%s`", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "active", UserServicePort)
-						} else {
-							statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`\n`%s` is currently `%s` on port `%s`", *i.InstanceId, *i.PublicIpAddress, *i.State, UserServiceName, "inactive", UserServicePort)
-						}
-					}
-
-				} else {
-					statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance State: `%v`", *i.InstanceId, *i.State)
-				}
-			}
-		}
-		log.Println(statusMessage)
-
+		statusMessage = status.GetEc2InstanceStatus(instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
 		_, err = s.ChannelMessageSend(ChannelId, statusMessage)
 		if err != nil {
 			log.Println("Error sending message:", err)
+			return
 		}
+
 	case "!start":
 		if UserInstanceId == "" {
 			tagName := "tag:" + UserTagKey
@@ -386,11 +286,13 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// Sets flags we're looking for in this command
 			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in", "-k", "-it"}
 
-			statusMessage, UserInstanceId = create.CreateEc2Instance(messageContentSlice, flagArray, client)
+			statusMessage, UserInstanceId, UserTagKey, UserTagValue, UserServiceName, UserServicePort, ServiceCheckPort = create.CreateEc2Instance(messageContentSlice, flagArray, client)
 			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
 			if err != nil {
 				log.Println("Error sending message:", err)
 			}
+
+			instanceIds = append(instanceIds, UserInstanceId)
 		}
 
 		if previousDiscordMessages[0] == oneTimePassword && strings.Contains(previousDiscordMessages[1], "!terminate") {
@@ -398,13 +300,12 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// Breaks !create message into an array of strings
 			messageContentSlice := strings.Fields(previousDiscordMessages[1])
 
-			statusMessage = terminate.TerminateEc2Instance(messageContentSlice, UserInstanceId, client)
+			statusMessage, UserInstanceId = terminate.TerminateEc2Instance(messageContentSlice, instanceIds, client)
 			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
 			if err != nil {
 				log.Println("Error sending message:", err)
 				return
 			}
-			UserInstanceId = ""
 		}
 
 		return
