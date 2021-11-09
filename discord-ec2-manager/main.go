@@ -19,6 +19,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"discord-ec2-manager/discord-ec2-manager/create"
+	"discord-ec2-manager/discord-ec2-manager/terminate"
 )
 
 // Used alongside GenerateOTP to create a 6 digit psuedorandom OTP to block !create / !terminate from being used by non-admins
@@ -124,20 +125,11 @@ type EC2InstanceAPI interface {
 	TerminateInstances(ctx context.Context,
 		params *ec2.TerminateInstancesInput,
 		optFns ...func(*ec2.Options)) (*ec2.TerminateInstancesOutput, error)
-
-	AssociateIamInstanceProfile(ctx context.Context,
-		params *ec2.AssociateIamInstanceProfileInput,
-		optFns ...func(*ec2.Options)) (*ec2.AssociateIamInstanceProfileOutput, error)
 }
 
 // Creates an EC2 instance
 func MakeInstance(c context.Context, api EC2InstanceAPI, input *ec2.RunInstancesInput) (*ec2.RunInstancesOutput, error) {
 	return api.RunInstances(c, input)
-}
-
-// Associates IAM Role with EC2 Instance
-func AttachIamRole(c context.Context, api EC2InstanceAPI, input *ec2.AssociateIamInstanceProfileInput) (*ec2.AssociateIamInstanceProfileOutput, error) {
-	return api.AssociateIamInstanceProfile(c, input)
 }
 
 // Terminates an EC2 instance
@@ -405,37 +397,12 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 			// Breaks !create message into an array of strings
 			messageContentSlice := strings.Fields(previousDiscordMessages[1])
-			instanceIds = nil
 
-			if len(messageContentSlice) > 1 {
-				for i := 1; i < len(messageContentSlice); i += 2 {
-					switch messageContentSlice[i] {
-					case "-i":
-						if messageContentSlice[i+1] != "-i" {
-							UserInstanceId = messageContentSlice[i+1]
-							instanceIds = append(instanceIds, UserInstanceId)
-							break
-						}
-					}
-				}
-			} else {
-				instanceIds = append(instanceIds, UserInstanceId)
-			}
-
-			input := &ec2.TerminateInstancesInput{
-				InstanceIds: instanceIds,
-			}
-
-			_, err := TerminateInstance(context.TODO(), client, input)
-			if err != nil {
-				log.Println("Error terminating instance:", err)
-			}
-
-			log.Println("One time password entered correctly, terminating EC2 instance.")
-			statusMessage = "One time password entered correctly, terminating EC2 instance."
+			statusMessage = terminate.TerminateEc2Instance(messageContentSlice, UserInstanceId, client)
 			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
 			if err != nil {
 				log.Println("Error sending message:", err)
+				return
 			}
 			UserInstanceId = ""
 		}
