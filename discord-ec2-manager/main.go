@@ -40,6 +40,7 @@ var (
 	UserTagKey          string
 	UserTagValue        string
 	UserKeyName         string
+	UserInstanceType    string
 
 	// Service Specific Variables
 	UserServiceName string
@@ -93,6 +94,7 @@ func init() {
 	flag.StringVar(&UserTagKey, "tk", "Name", "The key of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserTagValue, "tv", "Created by Discord", "The value of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserKeyName, "k", "", "The name of the key pair you'd like to assign to your EC2 instance for remote access (optional).")
+	flag.StringVar(&UserInstanceType, "it", "InstanceTypeT3aMedium", "The type, and size, of the EC2 instance you'd like to create. Defaults to t (optional).")
 
 	// IAM Instance Profiles
 	flag.StringVar(&UserIamArn, "ia", "", "The ARN of the IAM Instance Profile you'd like to attach to your EC2 instance on !create commands (optional).")
@@ -609,6 +611,22 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 								return
 							}
 						}
+					case "-it": // EC2 Instance Key Pair Name
+						for j := 0; j < len(flagArray); j++ {
+							if messageContentSlice[i+1] != flagArray[j] {
+								UserInstanceType = messageContentSlice[i+1]
+							} else {
+								log.Println("Invalid Instance Type:", messageContentSlice[i+1])
+
+								statusMessage = fmt.Sprintf("Invalid Instance Type: %s", messageContentSlice[i+1])
+
+								_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+								if err != nil {
+									log.Println("Error sending message:", err)
+								}
+								return
+							}
+						}
 					}
 				}
 
@@ -634,7 +652,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				if UserKeyName == "" {
 					runInstancesInput = &ec2.RunInstancesInput{
 						ImageId:          aws.String(UserAmiId),
-						InstanceType:     types.InstanceTypeT3aMedium,
+						InstanceType:     types.InstanceType(UserInstanceType),
 						MinCount:         aws.Int32(1),
 						MaxCount:         aws.Int32(1),
 						SecurityGroupIds: SecurityGroupIds,
@@ -648,7 +666,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				} else {
 					runInstancesInput = &ec2.RunInstancesInput{
 						ImageId:          aws.String(UserAmiId),
-						InstanceType:     types.InstanceTypeT3aMedium,
+						InstanceType:     types.InstanceType(UserInstanceType),
 						MinCount:         aws.Int32(1),
 						MaxCount:         aws.Int32(1),
 						SecurityGroupIds: SecurityGroupIds,
