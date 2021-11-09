@@ -17,9 +17,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/bwmarrin/discordgo"
 
-	"discord-ec2-manager/discord-ec2-manager/create"
-	"discord-ec2-manager/discord-ec2-manager/status"
-	"discord-ec2-manager/discord-ec2-manager/terminate"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/create"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/status"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/terminate"
 )
 
 // Used alongside GenerateOTP to create a 6 digit psuedorandom OTP to block !create / !terminate from being used by non-admins
