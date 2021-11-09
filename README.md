@@ -83,8 +83,12 @@ ___
 The `-in` flag allows you to enter in the Name of the IAM Role that you would like to attach to your EC2 instance on its creation. **Cannot be used if using the `-ia` flag.** The flag does not have a default value, and accepts a string as an input.
 ___
 
-### `-k` EC2 Instance Key Pair
+### `-k` EC2 Instance Key Pair (Optional)
 The `-k` flag allows you to enter in the Name of the key pair that you would like to attach to your EC2 instance on its creation. This, in conjunction with the rules you specify in your EC2 Instance's Security Group, will allow for remote access to your EC2 instance. The flag does not have a default value, and accepts a string as an input.
+___
+
+### `-it` EC2 Instance Type (Optional)
+The `-it` flag allows you to configure the Type and Size of your EC2 instance on its creation. The flag defaults to `t3a.medium` and accepts a string as an input. 
 ___
 
 ### `-o` One Time Password Length (Optional)
