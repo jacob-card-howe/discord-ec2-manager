@@ -1,4 +1,4 @@
-module discord-ec2-manager/discord-ec2-manager
+module github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager
 
 go 1.16
 
