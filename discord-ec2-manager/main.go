@@ -94,7 +94,7 @@ func init() {
 	flag.StringVar(&UserTagKey, "tk", "Name", "The key of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserTagValue, "tv", "Created by Discord", "The value of the tag you'd like to assign your EC2 instance (optional).")
 	flag.StringVar(&UserKeyName, "k", "", "The name of the key pair you'd like to assign to your EC2 instance for remote access (optional).")
-	flag.StringVar(&UserInstanceType, "it", "InstanceTypeT3aMedium", "The type, and size, of the EC2 instance you'd like to create. Defaults to t (optional).")
+	flag.StringVar(&UserInstanceType, "it", "t3a.medium", "The type, and size, of the EC2 instance you'd like to create. Defaults to t (optional).")
 
 	// IAM Instance Profiles
 	flag.StringVar(&UserIamArn, "ia", "", "The ARN of the IAM Instance Profile you'd like to attach to your EC2 instance on !create commands (optional).")
@@ -397,7 +397,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 			messageContentSlice := strings.Fields(previousDiscordMessages[1])
 
 			// Sets flags we're looking for in this command
-			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in", "-k"}
+			flagArray := []string{"-sn", "-sg", "-ami", "-tk", "-tv", "-u", "-svc", "-sp", "-scp", "-ia", "-in", "-k", "-it"}
 
 			log.Println("Checking for required flags...")
 			if len(messageContentSlice) > 1 {
@@ -683,6 +683,13 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				result, err := MakeInstance(context.TODO(), client, runInstancesInput)
 				if err != nil {
 					fmt.Println("Error creating EC2 instance:", err)
+					statusMessage = fmt.Sprint("There was an error creating your EC2 instance:", err)
+
+					_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+					if err != nil {
+						log.Println("Error sending message:", err)
+					}
+					return
 				}
 
 				UserInstanceId = *result.Instances[0].InstanceId
@@ -710,6 +717,7 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 				_, err = CreateTag(context.TODO(), client, tagInput)
 				if err != nil {
 					log.Println("Error tagging resources:", err)
+					return
 				}
 
 			} else {
