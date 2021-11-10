@@ -13,20 +13,32 @@ import (
 var (
 	// EC2 Instance Stuff
 	UserInstanceId string
-	UserTagKey string
-	UserTagValue string
+	UserTagKey     string
+	UserTagValue   string
 
 	ServiceCheckPort string
 
 	UserServiceName string
 	UserServicePort string
 
-	instanceIds []string
+	instanceSpecified      bool
+	instancesToCheckStatus []string
+
+	input *ec2.DescribeInstancesInput
 )
 
-func GetEc2InstanceStatus(instanceIds []string, UserTagKey string, UserTagValue string, ServiceCheckPort string, UserServiceName string, UserServicePort string, client *ec2.Client) (statusMessage string) {
+type EC2InstanceAPI interface {
+	DescribeInstances(ctx context.Context,
+		params *ec2.DescribeInstancesInput,
+		optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+}
 
-	log.Println(instanceIds)
+// Creates an EC2 instance
+func GetInstances(c context.Context, api EC2InstanceAPI, input *ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
+	return api.DescribeInstances(c, input)
+}
+
+func GetEc2InstanceStatus(messageContentSlice []string, instanceIds []string, UserTagKey string, UserTagValue string, ServiceCheckPort string, UserServiceName string, UserServicePort string, client *ec2.Client) (statusMessage string) {
 
 	if len(instanceIds) < 1 {
 		log.Println("There are no instances stored in the bot's memory. Use !create to add an instance to the instanceIds slice.")
@@ -34,9 +46,35 @@ func GetEc2InstanceStatus(instanceIds []string, UserTagKey string, UserTagValue 
 		return
 	}
 
-	status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-		InstanceIds: instanceIds,
-	})
+	log.Println("Instances in Memory:", instanceIds)
+
+	if len(messageContentSlice) > 1 {
+		for i := 1; i < len(messageContentSlice); i += 2 {
+			switch messageContentSlice[i] {
+			case "-i":
+				instanceSpecified = true
+				if messageContentSlice[i+1] != "-i" {
+					UserInstanceId = messageContentSlice[i+1]
+					instancesToCheckStatus = append(instancesToCheckStatus, UserInstanceId)
+				}
+			}
+		}
+	}
+
+	if instanceSpecified {
+		log.Println("Instance flag was specified, setting InstanceIds to instancesToCheckStatus:", instancesToCheckStatus)
+		input = &ec2.DescribeInstancesInput{
+			InstanceIds: instancesToCheckStatus,
+		}
+	} else {
+		log.Println("Instance flag was NOT specified, setting InstanceIds to instanceIds:", instanceIds)
+		input = &ec2.DescribeInstancesInput{
+			InstanceIds: instanceIds,
+		}
+	}
+
+	log.Printf("Getting status using %v as input", input.InstanceIds)
+	status, err := GetInstances(context.TODO(), client, input)
 
 	if err != nil {
 		log.Println("Error getting status:", err)
@@ -49,11 +87,9 @@ func GetEc2InstanceStatus(instanceIds []string, UserTagKey string, UserTagValue 
 			instanceState := fmt.Sprintf("%v", *i.State)
 			if strings.Contains(instanceState, "running") {
 				if ServiceCheckPort == "" {
-					log.Println("===== LINE 78 =====")
 					statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance IP: `%s`\nInstance State: `%v`", *i.InstanceId, *i.PublicIpAddress, *i.State)
 					return
 				} else {
-					log.Println("===== LINE 82 =====")
 					instanceIpAndPort := fmt.Sprint("http://", *i.PublicIpAddress, ":", ServiceCheckPort)
 
 					resp, err := http.Get(instanceIpAndPort)
@@ -75,7 +111,6 @@ func GetEc2InstanceStatus(instanceIds []string, UserTagKey string, UserTagValue 
 				}
 
 			} else {
-				log.Println("===== LINE 104 =====")
 				statusMessage = fmt.Sprintf("Instance ID: `%s`\nInstance State: `%v`", *i.InstanceId, *i.State)
 				return
 			}

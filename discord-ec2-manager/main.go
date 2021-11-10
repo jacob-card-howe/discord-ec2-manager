@@ -148,15 +148,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	client := ec2.NewFromConfig(cfg)
 
 	switch m.Content {
-	case "!status":
-
-		statusMessage = status.GetEc2InstanceStatus(instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
-		_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-		if err != nil {
-			log.Println("Error sending message:", err)
-			return
-		}
-
 	case "!start":
 		if UserInstanceId == "" {
 			tagName := "tag:" + UserTagKey
@@ -265,6 +256,19 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if len(previousDiscordMessagesStructs) > 0 {
 			for i := 0; i < len(previousDiscordMessagesStructs); i++ {
 				previousDiscordMessages = append(previousDiscordMessages, previousDiscordMessagesStructs[i].Content)
+			}
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!status") {
+			log.Println("Converting most recent message to a slice...")
+			messageContentSlice := strings.Fields(previousDiscordMessages[0])
+
+			log.Println("Running GetEc2InstanceStatus...")
+			statusMessage = status.GetEc2InstanceStatus(messageContentSlice, instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
+			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+				return
 			}
 		}
 
