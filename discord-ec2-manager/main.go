@@ -11,14 +11,14 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/bwmarrin/discordgo"
 
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/create"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/start"
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/status"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/stop"
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/terminate"
 )
 
@@ -148,90 +148,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	client := ec2.NewFromConfig(cfg)
 
 	switch m.Content {
-	case "!status":
-
-		statusMessage = status.GetEc2InstanceStatus(instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
-		_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-		if err != nil {
-			log.Println("Error sending message:", err)
-			return
-		}
-
-	case "!start":
-		if UserInstanceId == "" {
-			tagName := "tag:" + UserTagKey
-
-			status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-				InstanceIds: instanceIds,
-				Filters: []types.Filter{
-					{
-						Name:   aws.String(tagName),
-						Values: []string{UserTagValue},
-					},
-				},
-			})
-			if err != nil {
-				log.Println("Error getting status:", err)
-			}
-
-			UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
-		}
-
-		instanceIds = append(instanceIds, UserInstanceId)
-
-		_, err := client.StartInstances(context.TODO(), &ec2.StartInstancesInput{
-			InstanceIds: instanceIds,
-		})
-		if err != nil {
-			log.Println("Error starting EC2 instance:", err)
-			_, err = s.ChannelMessageSend(ChannelId, "**ERROR**: There was an error trying to start your EC2 instance. Please see your bot's error logs for more information.")
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		} else {
-			_, err = s.ChannelMessageSend(ChannelId, "Starting EC2 instance...\nUse **`!status`** to track the status of your server as it comes online!")
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		}
-	case "!stop":
-		if UserInstanceId == "" {
-			tagName := "tag:" + UserTagKey
-
-			status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-				InstanceIds: instanceIds,
-				Filters: []types.Filter{
-					{
-						Name:   aws.String(tagName),
-						Values: []string{UserTagValue},
-					},
-				},
-			})
-			if err != nil {
-				log.Println("Error getting status:", err)
-			}
-
-			UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
-		}
-
-		instanceIds = append(instanceIds, UserInstanceId)
-
-		_, err := client.StopInstances(context.TODO(), &ec2.StopInstancesInput{
-			InstanceIds: instanceIds,
-		})
-		if err != nil {
-			log.Println("Error stopping EC2 instance:", err)
-			statusMessage = "There was an error stopping your EC2 instance. Please check your bot's error logs for more information."
-			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		} else {
-			_, err = s.ChannelMessageSend(ChannelId, "Stopping EC2 instance...")
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		}
 	case "!help":
 		if UserServiceName != "" && UserServicePort != "" {
 			helpMessage := fmt.Sprintf("**`!create`** -- Creates a brand new EC2 instances\n**`!status`** -- Checks the status of the EC2 instance, checks for public IP address\n**`!start`** -- Starts your EC2 instance\n**`!stop`** -- Stops your EC2 instance\n**`!terminate`** -- Terminates (deletes) your EC2 instance\n**`!help`** -- Displays commands and what they do :smile:\n\n`%s` is running on port `%s`", UserServiceName, UserServicePort)
@@ -265,6 +181,37 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if len(previousDiscordMessagesStructs) > 0 {
 			for i := 0; i < len(previousDiscordMessagesStructs); i++ {
 				previousDiscordMessages = append(previousDiscordMessages, previousDiscordMessagesStructs[i].Content)
+			}
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!status") {
+			messageContentSlice := strings.Fields(previousDiscordMessages[0])
+
+			statusMessage = status.GetEc2InstanceStatus(messageContentSlice, instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
+			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+				return
+			}
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!start") {
+			messageContentSlice := strings.Fields(previousDiscordMessages[0])
+
+			statusMessage, UserInstanceId = start.StartEc2Instance(messageContentSlice, instanceIds, client)
+			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
+			}
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!stop") {
+			messageContentSlice := strings.Fields(previousDiscordMessages[0])
+
+			statusMessage = stop.StopEc2Instance(messageContentSlice, instanceIds, client)
+			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
 			}
 		}
 
