@@ -46,7 +46,7 @@ func GetEc2InstanceStatus(messageContentSlice []string, instanceIds []string, Us
 		return
 	}
 
-	log.Println("Instances in Memory:", instanceIds)
+	log.Println("Instances in Memory for !status:", instanceIds)
 
 	if len(messageContentSlice) > 1 {
 		for i := 1; i < len(messageContentSlice); i += 2 {
@@ -62,12 +62,10 @@ func GetEc2InstanceStatus(messageContentSlice []string, instanceIds []string, Us
 	}
 
 	if instanceSpecified {
-		log.Println("Instance flag was specified, setting InstanceIds to instancesToCheckStatus:", instancesToCheckStatus)
 		input = &ec2.DescribeInstancesInput{
 			InstanceIds: instancesToCheckStatus,
 		}
 	} else {
-		log.Println("Instance flag was NOT specified, setting InstanceIds to instanceIds:", instanceIds)
 		input = &ec2.DescribeInstancesInput{
 			InstanceIds: instanceIds,
 		}

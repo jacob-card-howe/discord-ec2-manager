@@ -18,6 +18,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/create"
+	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/start"
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/status"
 	"github.com/jacob-howe/discord-ec2-manager/discord-ec2-manager/terminate"
 )
@@ -148,43 +149,6 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	client := ec2.NewFromConfig(cfg)
 
 	switch m.Content {
-	case "!start":
-		if UserInstanceId == "" {
-			tagName := "tag:" + UserTagKey
-
-			status, err := client.DescribeInstances(context.TODO(), &ec2.DescribeInstancesInput{
-				InstanceIds: instanceIds,
-				Filters: []types.Filter{
-					{
-						Name:   aws.String(tagName),
-						Values: []string{UserTagValue},
-					},
-				},
-			})
-			if err != nil {
-				log.Println("Error getting status:", err)
-			}
-
-			UserInstanceId = *status.Reservations[0].Instances[0].InstanceId
-		}
-
-		instanceIds = append(instanceIds, UserInstanceId)
-
-		_, err := client.StartInstances(context.TODO(), &ec2.StartInstancesInput{
-			InstanceIds: instanceIds,
-		})
-		if err != nil {
-			log.Println("Error starting EC2 instance:", err)
-			_, err = s.ChannelMessageSend(ChannelId, "**ERROR**: There was an error trying to start your EC2 instance. Please see your bot's error logs for more information.")
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		} else {
-			_, err = s.ChannelMessageSend(ChannelId, "Starting EC2 instance...\nUse **`!status`** to track the status of your server as it comes online!")
-			if err != nil {
-				log.Println("Error sending message:", err)
-			}
-		}
 	case "!stop":
 		if UserInstanceId == "" {
 			tagName := "tag:" + UserTagKey
@@ -260,15 +224,23 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		if strings.Contains(previousDiscordMessages[0], "!status") {
-			log.Println("Converting most recent message to a slice...")
 			messageContentSlice := strings.Fields(previousDiscordMessages[0])
 
-			log.Println("Running GetEc2InstanceStatus...")
 			statusMessage = status.GetEc2InstanceStatus(messageContentSlice, instanceIds, UserTagKey, UserTagValue, ServiceCheckPort, UserServiceName, UserServicePort, client)
 			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
 			if err != nil {
 				log.Println("Error sending message:", err)
 				return
+			}
+		}
+
+		if strings.Contains(previousDiscordMessages[0], "!start") {
+			messageContentSlice := strings.Fields(previousDiscordMessages[0])
+
+			statusMessage, UserInstanceId = start.StartEc2Instance(messageContentSlice, instanceIds, client)
+			_, err = s.ChannelMessageSend(ChannelId, statusMessage)
+			if err != nil {
+				log.Println("Error sending message:", err)
 			}
 		}
 
