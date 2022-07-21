@@ -1,6 +1,10 @@
 # discord-ec2-manager
 A go-powered Discord bot capable of creating, starting, stopping, and terminating AWS EC2 instances.
 
+## Build Statuses
+[![Build Go Binary](https://github.com/jacob-card-howe/discord-ec2-manager/actions/workflows/go-build.yml/badge.svg)](https://github.com/jacob-card-howe/discord-ec2-manager/actions/workflows/go-build.yml)
+[![Build Docker Image](https://github.com/jacob-card-howe/discord-ec2-manager/actions/workflows/build-docker-image.yml/badge.svg)](https://github.com/jacob-card-howe/discord-ec2-manager/actions/workflows/build-docker-image.yml)
+
 ## Introduction
 About once a year my friends and I all get this crazy urge to play Minecraft with one another. We play the hell out of it for about a week and then drop it to do other things. The `discord-ec2-manager` project is the spawn of my obessive over-engineering for the love of Minecraft. 
 
