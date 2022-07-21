@@ -132,7 +132,7 @@ func GenerateOTP(length int) (string, error) {
 	return string(buffer), nil
 }
 
-// Listens for new messages, starts a timer / loop to send messages to discord anytime there's a new RSS message
+// Listens for new messages to get the command issued by users in the Discord Channel (i.e. !start, !stop, etc.)
 func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Bails out of the script if the new message is from this bot
