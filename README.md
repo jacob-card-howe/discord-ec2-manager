@@ -1,10 +1,10 @@
 # discord-ec2-manager
-A go-powered Discord bot capable of creating, starting, stopping, and terminating EC2 instances.
+A go-powered Discord bot capable of creating, starting, stopping, and terminating AWS EC2 instances.
 
 ## Introduction
 About once a year my friends and I all get this crazy urge to play Minecraft with one another. We play the hell out of it for about a week and then drop it to do other things. The `discord-ec2-manager` project is the spawn of my obessive over-engineering for the love of Minecraft. 
 
-But Minecraft isn't this project's only claim to fame! No, you see this project has all sorts of tricks up its sleeves. It is capable of creating / terminating instances (protected, of course, by a pseudo-randomly generated one time password outputted to the bot's logs), it can start and stop an existing server via a string passed in through the bot's executable, and it can even accept custom tag names and values. 
+But Minecraft isn't this project's only claim to fame! No, you see this project has all sorts of tricks up its sleeves. It is capable of creating / terminating AWS EC2 instances (protected, of course, by a pseudo-randomly generated one time password outputted to the bot's logs), it can start and stop an existing server via a string passed in through the bot's executable, and it can even accept custom tag names and values. 
 
 Below you'll find information on how you can use the bot both locally and via Docker, as well as a description of both the bot's command line arguments, and Discord commands.
 ___
@@ -104,7 +104,7 @@ This section will talk about some of the stuff you need to consider when spinnin
 
 First and foremost, you'll want to build the Docker image by running `docker build -t discord-ec2-manager .` in the root of `discord-ec2-manager/`. If you're passing in a `user data` script, you'll want to make sure to include it in your `discord-ec2-manager/discord-ec2-manager` directory, and pass in the path to your file via `-e PATH_TO_USERDATA=`
 
-Next up, to run the Docker container locally (your bot won't work unless you can somehow pass in your AWS credentials to your container) enter in `docker run -e BOT_TOKEN=YOUR_BOT_TOKEN -e CHANNEL_ID=YOUR_CHANNEL_ID . . .discord-ec2-manager:latest` to your terminal. After you pass in `CHANNEL_ID` it's relatively optional what flags you pass in.
+Next up, to run the Docker container locally (***your bot won't work unless you can somehow pass in your AWS credentials to your container***) enter in `docker run -e BOT_TOKEN=YOUR_BOT_TOKEN -e CHANNEL_ID=YOUR_CHANNEL_ID . . .discord-ec2-manager:latest` to your terminal. After you pass in `CHANNEL_ID` it's relatively optional what flags you pass in.
 
 If you're running this in ECS, you may encounter issues if you pass in an empty string for `INSTANCE_ID`. I have `INSTANCE_ID` set to `i-actualgarbage` and things seem to be working fine for me up in AWS Land! 
 
@@ -112,13 +112,13 @@ If you're running this in ECS, you may encounter issues if you pass in an empty 
 ## Discord Server Commands
 This section will cover the commands available to you once the bot running and a member of your Discord server.
 
-### 🆕 `!create`
+### `!create`
 This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will create a new EC2 instance with the tags, security group ID, and in the subnet you provided either via your bot's argument flags on start up **OR** via your bot's argument flags in your `!create` Discord message. Additionally, if you use the `-u` flag (either at start up or in your `!create` Discord message) to include a path to a User Data script, your EC2 instance will run those commands on intial boot.
 
 **Example `!create` Discord Message:** `!create -sn subnet-1234abcde5678 -sg sg-1234abcde5678 -ami ami-1234abcde5678 -tk MyCustomTagKey -tv MyCustomTagValue -u /absolute/path/to/userdata.sh -svc MyServiceName -sp 1234 -scp 7777`
 ___
 
-### 🆕 `!terminate`
+### `!terminate`
 This command will generate a one time password (found in your bot's error logs). If your next message matches the OTP found in your bot's error logs, it will terminate all `discord-ec2-manager` managed EC2 instances. You can target specific instances with a `-i` parameter flag tailing your `!terminate` command in Discord.
 
 **Example `!terminate` Discord Message:** `!terminate -i i-1234abcde5678`
