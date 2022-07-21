@@ -19,11 +19,11 @@ ___
 * Access to a [Discord Bot](https://discord.com/developers/applications/)
 ___
 
-## Running `discord-ec2-manager` via CLI
-There will always be at _least_ three required arguments while running the CLI. Breakdown of arguments and their requirements below:
+## Running `discord-ec2-manager` Locally
+There will always be at _least_ three required arguments while running `discord-ec2-manager` locally. Below you'll find a breakdown of available arguments and _their_ requirements below:
 
 <details>
-    <summary> Click this dropdown to see a full list of parameter flags</summary>
+    <summary> Click this dropdown to see a full list of parameter flags!</summary>
 
 ### `-t` Discord Bot Token (**REQUIRED**)
 The `t` flag sets your Discord Bot Token. There is no default value, and the flag accepts a string as input. For more information on how to generate a Discord Bot Token, [check out this article](https://www.freecodecamp.org/news/create-a-discord-bot-with-python/) by [freecodecamp.org](https://freecodecamp.org)
@@ -103,17 +103,17 @@ With the `-o` flag, you're able to set the One Time Password's length. The defau
 ___
 
 
-## Running `discord-ec2-manager` via Docker
-This section will talk about some of the stuff you need to consider when spinning up the bot in a Docker Container.
+## Running `discord-ec2-manager` via ECS Fargate
+This section will talk about some of the stuff you need to consider when spinning up the bot in AWS' ECS Fargate as a Docker container.
 
-First and foremost, you'll want to build the Docker image by running `docker build -t discord-ec2-manager .` in the root of `discord-ec2-manager/`. If you're passing in a `user data` script, you'll want to make sure to include it in your `discord-ec2-manager/discord-ec2-manager` directory, and pass in the path to your file via `-e PATH_TO_USERDATA=`
+First and foremost, you'll want to build the Docker image by running `docker build -t discord-ec2-manager .` in the root of `discord-ec2-manager/` on your local device. If you're passing in a `user data` script (useful for the `!create` bot command), you'll want to make sure to include it in your `discord-ec2-manager/discord-ec2-manager` directory, and pass in the path to your file via `-e PATH_TO_USERDATA=`
 
-Next up, to run the Docker container locally (***your bot won't work unless you can somehow pass in your AWS credentials to your container***) enter in `docker run -e BOT_TOKEN=YOUR_BOT_TOKEN -e CHANNEL_ID=YOUR_CHANNEL_ID . . .discord-ec2-manager:latest` to your terminal. After you pass in `CHANNEL_ID` it's relatively optional what flags you pass in.
+Upload the image you've just built locally on your machine to AWS' Elastic Container Repository (ECR) service [by following AWS' documentation](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html) and read up on how to deploy it to ECS Fargate [on AWS' documentation page](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html).
 
-If you're running this in ECS, you may encounter issues if you pass in an empty string for `INSTANCE_ID`. I have `INSTANCE_ID` set to `i-actualgarbage` and things seem to be working fine for me up in AWS Land! 
+👋🏻 **HEADS UP**: If you're running this in ECS, you may encounter issues if you pass in an empty string for `INSTANCE_ID`. I have `INSTANCE_ID` set to `i-actualgarbage` and things seem to be working fine for me up in AWS Land! 
 
 
-## Discord Server Commands
+## Discord Commands
 This section will cover the commands available to you once the bot running and a member of your Discord server.
 
 ### `!create`
@@ -164,6 +164,7 @@ If you'd like a `user data` script that'll start Minecraft on your server's laun
 * [Golang Download](https://golang.org/dl/)
 * [Amazon Web Services (AWS) CLI Download](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html)
 * [Amazon Web Services (AWS) Console](https://aws.amazon.com/console/)
+* [_Pushing a Docker Image_ (AWS ECR Documentation)](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html)
 
 ### Go Modules
 * [`discordgo` by bwmarrin](https://github.com/bwmarrin/discordgo)
