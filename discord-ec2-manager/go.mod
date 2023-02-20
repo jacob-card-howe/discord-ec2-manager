@@ -7,4 +7,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.14
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.49.1
 	github.com/bwmarrin/discordgo v0.25.0
+	github.com/gorilla/websocket v1.5.0 // indirect
+	golang.org/x/crypto v0.6.0 // indirect
 )
